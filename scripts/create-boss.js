@@ -1,17 +1,25 @@
-import readline from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
+import { input } from "@inquirer/prompts";
+import password from "@inquirer/password";
 import argon2 from "argon2";
 import pg from "pg";
 
 const { Pool } = pg;
 
-const rl = readline.createInterface({ input, output });
-const email = (process.env.BOSS_EMAIL || await rl.question("Boss email: ")).trim().toLowerCase();
-const password = process.env.BOSS_PASSWORD || await rl.question("Boss password (use a secret manager in production): ");
-rl.close();
+const email = (process.env.BOSS_EMAIL || await input({ message: "Boss email:" }))
+  .trim()
+  .toLowerCase();
+const bossPassword = process.env.BOSS_PASSWORD || await password({
+  message: "Boss password:",
+  mask: true
+});
+const confirmation = process.env.BOSS_PASSWORD || await password({
+  message: "Repeat boss password:",
+  mask: true
+});
 
 if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Invalid email");
-if (password.length < 12) throw new Error("Password must be at least 12 characters");
+if (bossPassword.length < 12) throw new Error("Password must be at least 12 characters");
+if (bossPassword !== confirmation) throw new Error("Passwords do not match");
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -19,10 +27,13 @@ const client = await pool.connect();
 
 try {
   await client.query("BEGIN");
-  const existing = await client.query("SELECT 1 FROM users WHERE email = $1 FOR UPDATE", [email]);
+  const existing = await client.query(
+    "SELECT 1 FROM users WHERE email = $1 FOR UPDATE",
+    [email]
+  );
   if (existing.rowCount) throw new Error("User already exists; no changes made");
 
-  const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+  const passwordHash = await argon2.hash(bossPassword, { type: argon2.argon2id });
   const result = await client.query(
     `INSERT INTO users (email, password_hash, role)
      VALUES ($1, $2, 'boss')
