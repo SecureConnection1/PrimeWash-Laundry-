@@ -64,7 +64,7 @@ export function createApp({ db = pool, sendEmail = sendInvitationEmail } = {}) {
   });
 
   app.use(helmet());
-  app.use(express.json({ limit: "16kb" }));
+  app.use(express.json({ limit: "5mb" }));
 
   function requireAuth(req, res, next) {
     const header = req.get("authorization");
@@ -122,6 +122,58 @@ export function createApp({ db = pool, sendEmail = sendInvitationEmail } = {}) {
         accessToken: signAccessToken(user),
         user: { id: user.id, email: user.email, role: user.role }
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/auth/me", requireAuth, async (req, res, next) => {
+    try {
+      const result = await db.query(
+        "SELECT id, email, role FROM users WHERE id = $1",
+        [req.auth.sub]
+      );
+      const user = result.rows[0];
+      if (!user) return res.status(401).json({ error: "User no longer exists" });
+      return res.json({ user });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/erp/state", requireAuth, async (_req, res, next) => {
+    try {
+      const result = await db.query("SELECT state FROM erp_state WHERE id = 1");
+      return res.json({ state: result.rows[0]?.state || null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/erp/state", requireAuth, async (req, res, next) => {
+    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+      return res.status(400).json({ error: "A valid ERP state object is required" });
+    }
+    try {
+      await db.query(
+        `INSERT INTO erp_state (id, state, updated_by, updated_at)
+         VALUES (1, $1::jsonb, $2, now())
+         ON CONFLICT (id) DO UPDATE
+         SET state = EXCLUDED.state, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+        [JSON.stringify(req.body), req.auth.sub]
+      );
+      return res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/admin/users", requireAuth, requireCurrentBoss, async (_req, res, next) => {
+    try {
+      const result = await db.query(
+        "SELECT id, email, role, created_at FROM users ORDER BY created_at ASC"
+      );
+      return res.json({ users: result.rows });
     } catch (error) {
       next(error);
     }
