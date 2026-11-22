@@ -28,7 +28,7 @@ npm start
 ## Flow
 
 1. The boss logs in at `POST /auth/login` and receives a short-lived access token.
-2. The boss calls `POST /admin/invitations` with `Authorization: Bearer <token>` and `{ "email": "largestsecure@gmail.com" }`.
+2. The boss calls `POST /admin/invitations` with `Authorization: Bearer <token>` and `{ "email": "member@example.com" }`.
 3. The service generates a 256-bit random invitation token, stores only its SHA-256 hash, and expires it after `INVITATION_TTL_HOURS`.
 4. Replace `sendInvitationEmail` in `src/server.js` with your email provider. The raw registration URL is passed to that adapter and is never stored.
 5. The invited person submits the token and a password to `POST /auth/register`. Registration always creates a `member` role, marks the invitation used in the same transaction, and rejects expired, revoked, or reused invitations.
@@ -38,7 +38,7 @@ Example login:
 ```bash
 curl -s http://localhost:3000/auth/login \
   -H 'content-type: application/json' \
-  -d '{"email":"largestsecure@gmail.com","Secure2612345":"Secure2612345"}'
+  -d '{"email":"boss@example.com","password":"replace-with-a-local-test-password"}'
 ```
 
 Example boss-only invite:
